@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-context-kit"
+version = "0.1.0"
+description = "Runtime context engineering for LLM agents — token budgets, dynamic skill loading, tool-result compaction, conversation summarization, and sub-agent isolation."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=0.40.0",
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# tiktoken gives a closer-to-real token count than the char/4 heuristic, but
+# is optional: the heuristic is good enough for budget allocation, and callers
+# can always supply their own TokenCounter.
+tiktoken = ["tiktoken>=0.7"]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
