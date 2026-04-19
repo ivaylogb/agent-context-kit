@@ -435,6 +435,66 @@ def test_sub_agent_runs_to_text_response():
     assert result.turns_used == 1
 
 
+class _FailingMessages:
+    """Fake messages API that raises on every call; counts attempts."""
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def create(self, **kwargs: Any) -> Any:
+        self.calls.append(kwargs["model"])
+        raise RuntimeError(f"boom on {kwargs['model']}")
+
+
+class _FallbackMessages:
+    """Fails on the primary model, succeeds on the fallback."""
+
+    def __init__(self, primary: str) -> None:
+        self.primary = primary
+        self.calls: list[str] = []
+
+    def create(self, **kwargs: Any) -> Any:
+        self.calls.append(kwargs["model"])
+        if kwargs["model"] == self.primary:
+            raise RuntimeError("primary down")
+        return _FakeResponse([_FakeBlock("text", text="recovered via fallback")])
+
+
+def test_sub_agent_returns_structured_envelope_when_api_fails():
+    """API failure must not raise — it becomes a structured error envelope."""
+    client = type("_C", (), {"messages": _FailingMessages()})()
+    sub = SubAgent(
+        name="breaker",
+        task="do the thing",
+        client=client,
+        model="primary-model",
+    )
+    result = sub.run()
+    assert result.ok is False
+    assert result.status == "api_error"
+    assert isinstance(result.output, dict)
+    assert result.output["error"]["category"] == "upstream_failure"
+    assert "boom on primary-model" in result.output["error"]["message"]
+
+
+def test_sub_agent_retries_with_fallback_model_on_primary_failure():
+    messages = _FallbackMessages(primary="primary-model")
+    client = type("_C", (), {"messages": messages})()
+    sub = SubAgent(
+        name="resilient",
+        task="do the thing",
+        client=client,
+        model="primary-model",
+        fallback_model="fallback-model",
+    )
+    result = sub.run()
+    assert result.ok is True
+    assert result.status == "completed"
+    assert "recovered via fallback" in result.output
+    # Fallback was tried after primary failed.
+    assert messages.calls == ["primary-model", "fallback-model"]
+
+
 def test_sub_agent_executes_tool_calls():
     # Scripted: first response asks for a tool, second returns text.
     client = FakeClient(

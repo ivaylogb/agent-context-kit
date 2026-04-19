@@ -117,6 +117,7 @@ class SubAgent:
         tool_handlers: dict[str, Callable[..., Any]] | None = None,
         client: anthropic.Anthropic | None = None,
         model: str = "claude-haiku-4-5-20251001",
+        fallback_model: str | None = None,
         max_tokens: int = 2048,
         temperature: float = 0.0,
         max_turns: int = 8,
@@ -135,6 +136,12 @@ class SubAgent:
         self.tool_handlers = dict(tool_handlers or {})
         self.client = client or anthropic.Anthropic()
         self.model = model
+        # Optional alternate model to retry with if the primary model's API
+        # call fails. Keeps the "every LLM-backed component has a
+        # deterministic fallback" invariant intact: if the primary model is
+        # unreachable and a fallback is configured we try it once before
+        # surrendering to a structured error envelope.
+        self.fallback_model = fallback_model
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.max_turns = max_turns
@@ -166,26 +173,27 @@ class SubAgent:
         errors: list[str] = []
 
         for turn_idx in range(self.max_turns):
-            try:
-                api_kwargs: dict[str, Any] = {
-                    "model": self.model,
-                    "max_tokens": self.max_tokens,
-                    "temperature": self.temperature,
-                    "system": system,
-                    "messages": messages,
+            response, api_error = self._create_message(system, messages, turn_idx)
+            if response is None:
+                errors.append(f"api_error: {api_error}")
+                # Structured envelope on ExecutionResult.output so consumers
+                # can pattern-match the same shape the tool-kit uses:
+                # result["error"]["category"] without per-producer casing.
+                envelope = {
+                    "error": {
+                        "category": "upstream_failure",
+                        "message": api_error,
+                        "retryable": True,
+                        "suggested_action": (
+                            "The sub-agent could not reach the model. Retry "
+                            "later, pass a fallback_model, or escalate."
+                        ),
+                    }
                 }
-                if self.tool_schemas:
-                    api_kwargs["tools"] = self.tool_schemas
-                response = self.client.messages.create(**api_kwargs)
-            except Exception as e:  # noqa: BLE001
-                errors.append(f"api_error: {type(e).__name__}: {e}")
-                self._emit(
-                    "sub_agent_api_error",
-                    details={"error": str(e), "turn": turn_idx},
-                )
                 return ExecutionResult(
                     ok=False,
                     status="api_error",
+                    output=envelope,
                     errors=errors,
                     tool_calls=tool_calls,
                     turns_used=turn_idx,
@@ -301,6 +309,46 @@ class SubAgent:
             # against ``result_model`` if they care about strict parsing.
             return text
 
+    def _create_message(
+        self,
+        system: str,
+        messages: list[dict[str, Any]],
+        turn_idx: int,
+    ) -> tuple[Any, str]:
+        """Call the Anthropic API with the primary model; retry once on fallback.
+
+        Returns ``(response, "")`` on success, ``(None, last_error_message)``
+        on failure of both models. The fallback is only tried if configured
+        via ``fallback_model`` and it differs from the primary.
+        """
+        models_to_try = [self.model]
+        if self.fallback_model and self.fallback_model != self.model:
+            models_to_try.append(self.fallback_model)
+        last_error = ""
+        for attempt_model in models_to_try:
+            api_kwargs: dict[str, Any] = {
+                "model": attempt_model,
+                "max_tokens": self.max_tokens,
+                "temperature": self.temperature,
+                "system": system,
+                "messages": messages,
+            }
+            if self.tool_schemas:
+                api_kwargs["tools"] = self.tool_schemas
+            try:
+                return self.client.messages.create(**api_kwargs), ""
+            except Exception as e:  # noqa: BLE001 — model errors of any kind
+                last_error = f"{type(e).__name__}: {e}"
+                self._emit(
+                    "sub_agent_api_error",
+                    details={
+                        "error": last_error,
+                        "model": attempt_model,
+                        "turn": turn_idx,
+                    },
+                )
+        return None, last_error
+
     def _execute_tool(
         self,
         tool_name: str,
@@ -352,6 +400,7 @@ def delegate(
     client: anthropic.Anthropic | None = None,
     context: str | None = None,
     model: str = "claude-haiku-4-5-20251001",
+    fallback_model: str | None = None,
     max_turns: int = 8,
     result_model: type[BaseModel] | None = None,
     event_log: ContextEventLog | None = None,
@@ -370,6 +419,7 @@ def delegate(
         tool_handlers=tool_handlers,
         client=client,
         model=model,
+        fallback_model=fallback_model,
         max_turns=max_turns,
         result_model=result_model,
         event_log=event_log,
