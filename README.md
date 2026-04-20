@@ -18,7 +18,7 @@ It is the third repo in a portfolio of open-source patterns for production agent
 
 The LLM is the CPU. The context window is RAM. Context engineering is the operating system that manages what goes in.
 
-Following Lance Martin's taxonomy, this package is organised around four verbs:
+This package is organised around four verbs — a write/select/compress/isolate taxonomy common in recent context engineering work:
 
 | Verb | Problem | Primitives |
 |------|---------|------------|

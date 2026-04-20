@@ -1,6 +1,6 @@
 # Context Engineering Reference — Key Patterns
 
-This document captures the specific patterns and principles that inform agent-context-kit's architecture. These are drawn from Lance Martin's context engineering framework, the Manus system's production patterns, and Claude Code's skills architecture.
+This document captures the specific patterns and principles that inform agent-context-kit's architecture. They draw on published context engineering frameworks, patterns observed in the Manus system, and the Claude Code skills architecture.
 
 ---
 

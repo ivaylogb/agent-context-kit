@@ -8,7 +8,7 @@ component types, dynamic skill loading with progressive disclosure,
 tool-result compaction, schema-based conversation summarization, and
 sub-agent isolation.
 
-Public surface (grouped by Lance Martin's framework):
+Public surface (grouped by the write/select/compress/isolate taxonomy):
 
 **WRITE — what enters context**
 - ``ContextWindow`` — assembles the system prompt and messages each turn.
