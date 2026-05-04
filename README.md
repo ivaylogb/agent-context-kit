@@ -6,11 +6,17 @@ Runtime context engineering for LLM agents.
 
 This package provides the runtime machinery to keep the context window lean and focused at every turn: token budgets across component types, dynamic skill loading with progressive disclosure, tool-result compaction, schema-based conversation summarization, and sub-agent isolation.
 
-It is the third repo in a portfolio of open-source patterns for production agent development:
+## Where this fits
 
-- [`agent-eval-loop`](../agent-eval-loop) — the offline improvement loop: simulate, evaluate, improve.
-- [`agent-tool-kit`](../agent-tool-kit) — production-grade tool design: schemas, fat tools, registry, observability.
-- **`agent-context-kit`** — runtime context engineering: budgets, skills, compaction, isolation.
+Part of [agent-engineering](https://github.com/ivaylogb/agent-engineering) — a four-layer system for production-grade LLM agents.
+
+This kit is **Layer 3: Context runtime**. It answers: how do we keep the model focused?
+
+The other three layers:
+
+- [agent-eval-loop](https://github.com/ivaylogb/agent-eval-loop) — evaluation. How do we know the agent got better?
+- [agent-tool-kit](https://github.com/ivaylogb/agent-tool-kit) — tool contracts. How do we make agent actions reliable?
+- [agent-skill-kit](https://github.com/ivaylogb/agent-skill-kit) — development workflows. How do we make agent-building repeatable?
 
 ---
 
