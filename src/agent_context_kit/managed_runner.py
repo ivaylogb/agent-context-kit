@@ -19,6 +19,7 @@ import only happens when ``ManagedAgentRunner`` is instantiated.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from agent_context_kit.context.window import ContextWindow
@@ -111,11 +112,42 @@ class ManagedAgentRunner:
         # 4. Rebuild runner state from the window and issue the call.
         system_prompt = self.window.build_system_prompt()
         api_messages = self.window.build_api_messages()
+        # Snapshot the runner's cumulative tool_calls before the call so we
+        # can mirror exactly this turn's results into the window afterward.
+        tool_calls_before = len(self.runner.tool_calls)
         reply = self._call_runner(system_prompt, api_messages)
 
-        # 5. Record the assistant turn back in the window.
+        # 5. Mirror this turn's tool results into the window so progressive
+        #    tool-result compaction has slots to age. Done before the
+        #    assistant turn is added so the turn_index reflects the moment
+        #    the tool ran (between user turn and assistant turn), matching
+        #    the ordering used by ``examples/long_conversation/run.py``.
+        self._mirror_tool_results(tool_calls_before)
+
+        # 6. Record the assistant turn back in the window.
         self.window.add_assistant_turn(reply)
         return reply
+
+    def _mirror_tool_results(self, snapshot_before: int) -> None:
+        """Copy this turn's tool calls into ``window.tool_results``.
+
+        ``AgentRunner._process_response`` runs tools inside one
+        ``send_message`` round, feeding outputs back into the model via its
+        own local ``messages`` list. Those results never surface in
+        ``window.tool_results()`` unless we mirror them. We diff against
+        ``snapshot_before`` rather than scanning the whole cumulative
+        ``runner.tool_calls`` list so prior turns' results aren't double-
+        recorded. Content is JSON-serialized to match how the runner
+        already formats results for the API.
+        """
+        new_calls = self.runner.tool_calls[snapshot_before:]
+        for call in new_calls:
+            payload = call.result if call.result is not None else {"error": call.error}
+            if isinstance(payload, str):
+                content = payload
+            else:
+                content = json.dumps(payload, default=str)
+            self.window.add_tool_result(call.tool_name, content)
 
     def _call_runner(
         self,
