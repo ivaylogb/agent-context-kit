@@ -1,6 +1,6 @@
 # Context Engineering Reference — Key Patterns
 
-This document captures the specific patterns and principles that inform agent-context-kit's architecture. They draw on published context engineering frameworks, patterns observed in the Manus system, and the Claude Code skills architecture.
+This document covers context-engineering patterns: principles for assembling, compressing, and routing context into agent calls.
 
 ---
 
