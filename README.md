@@ -139,7 +139,7 @@ Default ratios match the reference doc's table; see `docs/best-practices.md` for
 
 ---
 
-## Integrating with the sibling repos
+## Integrating with other agent engineering kit repos
 
 ### With `agent-eval-loop`'s `AgentRunner`
 
